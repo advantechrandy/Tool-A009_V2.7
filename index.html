@@ -3,331 +3,458 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>無風扇系統表面溫度計算</title>
+    <title>Fanless 機殼溫度計算</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --neon-blue: #00d2ff;
-            --neon-orange: #ff9d00;
-            --panel-bg: #1e2227;
-            --border-color: #3e4451;
+            --neon-orange: #ff9f43;
+            --bg-dark: #0d1117;
+            --panel-bg: #161b22;
+            --border-color: #444c56;
+            --text-main: #f0f6fc;
+            --text-dim: #c9d1d9;
+            --text-label: #acbac7;
         }
         body {
-            background-color: #0f1114;
-            background-image: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
-                              linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
-            background-size: 100% 4px, 3px 100%;
-            color: #f1f5f9;
-            font-family: 'JetBrains Mono', 'Segoe UI', monospace;
-            overflow-x: hidden;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: 'JetBrains Mono', monospace;
+            margin: 0;
+            padding: 10px;
+            user-select: none;
         }
         .industrial-card {
             background: var(--panel-bg);
             border: 1px solid var(--border-color);
-            position: relative;
-            overflow: hidden;
+            transition: all 0.3s ease;
         }
-        .industrial-card::before {
-            content: "";
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 2px;
-            background: linear-gradient(90deg, transparent, var(--border-color), transparent);
-        }
-        .input-dark {
-            background: #111418;
-            border: 1px solid #4b5563;
+        .card-header {
+            background: #2d333b;
+            padding: 8px 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
             color: var(--neon-blue);
-            text-shadow: 0 0 5px rgba(0, 210, 255, 0.5);
-            transition: all 0.2s ease;
+            border-bottom: 1px solid var(--border-color);
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
-        .input-dark:focus {
-            border-color: var(--neon-blue);
-            box-shadow: 0 0 15px rgba(0, 210, 255, 0.2);
+        input[type="number"] {
+            background: #0d1117;
+            border: 1px solid var(--border-color);
+            color: #ffffff;
+            padding: 6px 10px;
+            width: 100%;
+            font-size: 0.9rem;
             outline: none;
         }
-        .input-with-unit {
-            padding-right: 5.5rem !important; 
+        input[type="number"]:focus {
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 8px rgba(0, 210, 255, 0.5);
         }
-        .unit-label {
-            right: 1rem;
-            pointer-events: none;
-            opacity: 0.6;
+        label { 
+            display: block; 
+            font-size: 0.7rem; 
+            color: var(--text-label); 
+            margin-bottom: 4px; 
+            text-transform: uppercase; 
+            font-weight: 600;
         }
-        .label-style {
-            color: #9ca3af;
-            font-size: 0.7rem;
-            letter-spacing: 0.1em;
-            font-weight: 700;
+        
+        #render-canvas {
+            height: 400px;
+            background: radial-gradient(circle at center, #22272e 0%, #0d1117 100%);
             display: flex;
             align-items: center;
+            justify-content: center;
+            position: relative;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
         }
-        .label-style::before {
-            content: ">>";
-            margin-right: 5px;
-            color: var(--neon-blue);
-            font-size: 0.6rem;
-        }
-        .panel-header {
-            background: #2d333b;
-            padding: 2px 15px;
-            font-size: 0.75rem;
-            font-weight: 800;
-            color: #ffffff;
-            border-bottom: 2px solid var(--neon-blue);
-            text-transform: uppercase;
-        }
-        .glow-text {
-            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
-        }
-        .lcd-number {
-            font-family: 'JetBrains Mono', monospace;
-            letter-spacing: -0.05em;
-        }
-        .corner-deco {
+
+        .dim-line {
             position: absolute;
-            width: 10px; height: 10px;
-            border: 2px solid var(--neon-blue);
+            border-color: #666;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            color: #aaa;
         }
-        .top-left { top: -2px; left: -2px; border-right: 0; border-bottom: 0; }
-        .bottom-right { bottom: -2px; right: -2px; border-left: 0; border-top: 0; }
+        .dim-line-h { border-top: 1px solid; border-bottom: 1px solid; height: 8px; width: 100%; }
+        .dim-line-v { border-left: 1px solid; border-right: 1px solid; width: 8px; height: 100%; }
+
+        .heat-ray {
+            position: absolute;
+            width: 1px;
+            background: linear-gradient(to top, transparent, var(--neon-blue), transparent);
+            animation: radiate 3s infinite linear;
+            opacity: 0;
+        }
+
+        @keyframes radiate {
+            0% { transform: translateY(0) scaleY(0.5); opacity: 0; }
+            50% { opacity: 0.6; }
+            100% { transform: translateY(-100px) scaleY(1.5); opacity: 0; }
+        }
+
+        .result-glow { text-shadow: 0 0 30px rgba(0, 210, 255, 0.8); color: #ffffff; }
+        .hotspot-glow { text-shadow: 0 0 20px rgba(255, 159, 67, 0.8); color: #ff9f43; }
         
-        @keyframes scanline {
-            0% { transform: translateY(-100%); }
-            100% { transform: translateY(100%); }
+        .tab-btn {
+            padding: 10px 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            border: 1px solid transparent;
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: all 0.2s;
         }
-        .scanline {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100px;
-            background: linear-gradient(to bottom, transparent, rgba(0, 210, 255, 0.03), transparent);
-            animation: scanline 8s linear infinite;
+        .tab-btn.active {
+            border: 1px solid var(--border-color);
+            border-bottom: 3px solid var(--neon-blue);
+            color: white;
+            background: var(--panel-bg);
+        }
+
+        /* Hotspot specific styles */
+        .hotspot-marker {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 1px dashed var(--neon-orange);
+            background: rgba(255, 159, 67, 0.2);
             pointer-events: none;
-            z-index: 50;
         }
     </style>
 </head>
-<body class="p-4 md:p-10">
-    <div class="scanline"></div>
-    
-    <div class="max-w-6xl mx-auto relative">
-        <div class="flex justify-between items-center mb-6 px-2">
-            <div class="h-1 w-1/4 bg-gradient-to-r from-cyan-500 to-transparent"></div>
-            <div class="text-[10px] text-cyan-500 font-bold tracking-[0.3em]"></div>
-            <div class="h-1 w-1/4 bg-gradient-to-l from-cyan-500 to-transparent"></div>
-        </div>
+<body>
 
-        <header class="mb-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-            <div class="relative pl-6 border-l-4 border-cyan-500">
-                <h1 class="text-3xl font-black text-white tracking-tight glow-text uppercase"><span class="text-cyan-500">無風扇系統表面溫度計算 V2.7</span></h1>
-                <p class="text-gray-400 text-xs mt-1 font-medium tracking-wider">提供無風扇系統快速計算表面溫度需求</p>
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <header class="flex justify-between items-center border-b border-gray-600 pb-2 mb-4">
+            <div>
+                <h1 class="text-2xl font-black italic text-white uppercase tracking-tighter">FANLESS機殼溫度計算 <span class="text-cyan-400">V3.4</span> </h1>
+                <p class="text-[10px] text-gray-400 uppercase tracking-widest font-bold">CREATOR:RANDY CHEN</p>
             </div>
-            <div class="bg-[#111418] border border-gray-700 p-2 px-4 rounded shadow-inner">
-                <div class="flex items-center gap-3">
-                    <div class="flex flex-col">
-                        <span class="text-[9px] text-gray-500 font-bold uppercase">System Status</span>
-                        <span class="text-[11px] text-green-400 font-bold tracking-widest uppercase animate-pulse">● Operational</span>
-                    </div>
-                    <div class="w-[1px] h-8 bg-gray-700 mx-2"></div>
-                    <div class="flex flex-col">
-                        <span class="text-[9px] text-gray-400 font-bold uppercase">Unit Mode</span>
-                        <span class="text-[11px] text-white font-bold uppercase">Metric (mm)</span>
-                    </div>
+            <div class="text-right">
+                <div id="real-time-clock" class="text-xl font-bold text-white mb-0 tracking-tighter">00:00:00</div>
+                <div class="text-[10px] text-green-400 font-bold flex items-center justify-end">
+                    <span class="w-2 h-2 bg-green-400 rounded-full mr-1.5 animate-pulse"></span> SYSTEM ACTIVE
                 </div>
             </div>
         </header>
 
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div class="lg:col-span-4 space-y-6">
-                <div class="industrial-card rounded-sm">
-                    <div class="panel-header flex justify-between items-center">
-                        <span>Config_Inputs</span>
-                        <span class="text-[9px] opacity-50">#0422-TX</span>
+        <!-- Tab Navigation -->
+        <div class="flex space-x-2 mb-4">
+            <button onclick="switchTab('main')" id="btn-main" class="tab-btn active">實時熱模擬分析 (SIMULATION)</button>
+            <button onclick="switchTab('docs')" id="btn-docs" class="tab-btn">理論公式與假設 (TECHNICAL DOCS)</button>
+        </div>
+
+        <!-- Main Content -->
+        <div id="tab-main" class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <!-- Left Side: Inputs -->
+            <div class="space-y-4 lg:col-span-1">
+                <div class="industrial-card">
+                    <div class="card-header">Chassis Geometry (mm)</div>
+                    <div class="p-4 grid grid-cols-2 gap-3">
+                        <div><label>Length (L)</label><input type="number" id="cL" value="200" oninput="solve()"></div>
+                        <div><label>Width (W)</label><input type="number" id="cW" value="150" oninput="solve()"></div>
+                        <div class="col-span-2"><label>Height (H)</label><input type="number" id="cH" value="80" oninput="solve()"></div>
                     </div>
-                    <div class="p-6 space-y-5">
-                        <div class="group">
-                            <label class="label-style mb-2">Total System Power [P]</label>
-                            <div class="relative">
-                                <input type="number" id="power" value="15" step="0.1" class="input-dark input-with-unit w-full p-3 pl-4 rounded-sm text-lg" oninput="calculate()">
-                                <span class="absolute unit-label top-4 text-gray-500 text-xs font-bold">W</span>
-                            </div>
-                        </div>
-                        
-                        <div class="group">
-                            <label class="label-style mb-2">Ambient Temp [Ta]</label>
-                            <div class="relative">
-                                <input type="number" id="ambient" value="25" step="1" class="input-dark input-with-unit w-full p-3 pl-4 rounded-sm text-lg" oninput="calculate()">
-                                <span class="absolute unit-label top-4 text-gray-500 text-xs font-bold">°C</span>
-                            </div>
-                        </div>
+                </div>
 
-                        <div class="py-4 border-y border-gray-800">
-                            <label class="label-style mb-3">Enclosure Dimensions [mm]</label>
-                            <div class="grid grid-cols-3 gap-3">
-                                <div class="space-y-1">
-                                    <input type="number" id="dimL" value="200" class="input-dark w-full p-2 text-center rounded-sm text-sm" oninput="calculate()">
-                                    <span class="text-[9px] text-gray-500 block text-center uppercase font-bold tracking-tighter italic">Length</span>
-                                </div>
-                                <div class="space-y-1">
-                                    <input type="number" id="dimW" value="150" class="input-dark w-full p-2 text-center rounded-sm text-sm" oninput="calculate()">
-                                    <span class="text-[9px] text-gray-500 block text-center uppercase font-bold tracking-tighter italic">Width</span>
-                                </div>
-                                <div class="space-y-1">
-                                    <input type="number" id="dimH" value="50" class="input-dark w-full p-2 text-center rounded-sm text-sm" oninput="calculate()">
-                                    <span class="text-[9px] text-gray-500 block text-center uppercase font-bold tracking-tighter italic">Height</span>
-                                </div>
-                            </div>
-                        </div>
+                <div class="industrial-card">
+                    <div class="card-header">Heat Source (mm)</div>
+                    <div class="p-4 grid grid-cols-2 gap-3">
+                        <div><label>Side A (L-Dir)</label><input type="number" id="hA" value="50" oninput="solve()"></div>
+                        <div><label>Side B (W-Dir)</label><input type="number" id="hB" value="50" oninput="solve()"></div>
+                        <div class="col-span-2"><p id="size-warning" class="text-[10px] text-red-400 font-bold hidden">警告：熱源尺寸超過機殼限制</p></div>
+                    </div>
+                </div>
 
-                        <div>
-                            <label class="label-style mb-2">Convection Coeff [h]</label>
-                            <div class="relative">
-                                <input type="number" id="hValue" value="8" step="0.1" class="input-dark input-with-unit w-full p-3 pl-4 rounded-sm border-l-4 border-yellow-500" oninput="calculate()">
-                                <span class="absolute unit-label top-4 text-gray-500 text-[10px] font-bold">W/m²K</span>
-                            </div>
-                            <div class="mt-3">
-                                <button onclick="setH(8)" class="w-full text-[10px] bg-[#2d333b] hover:bg-cyan-900 border border-gray-700 py-2 rounded-sm transition-all font-bold uppercase tracking-wider">重設為標準對流 (8)</button>
-                            </div>
+                <div class="industrial-card">
+                    <div class="card-header">Radiation Parameters (&epsilon;)</div>
+                    <div class="p-4 grid grid-cols-1 gap-3">
+                        <div><label>Source &epsilon; (熱源表面)</label><input type="number" id="epsSrc" value="0.95" step="0.01" max="1" min="0" oninput="solve()"></div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label>Inner &epsilon;</label><input type="number" id="epsIn" value="0.80" step="0.01" max="1" min="0" oninput="solve()"></div>
+                            <div><label>Outer &epsilon;</label><input type="number" id="epsOut" value="0.90" step="0.01" max="1" min="0" oninput="solve()"></div>
                         </div>
+                    </div>
+                </div>
+
+                <div class="industrial-card">
+                    <div class="card-header">Environment</div>
+                    <div class="p-4 grid grid-cols-2 gap-3">
+                        <div><label>Power (W)</label><input type="number" id="heatLoad" value="60" oninput="solve()"></div>
+                        <div><label>Amb (&deg;C)</label><input type="number" id="tAmb" value="25" oninput="solve()"></div>
                     </div>
                 </div>
             </div>
 
-            <div class="lg:col-span-8 space-y-6">
-                <div class="industrial-card rounded-sm min-h-[320px]">
-                    <div class="top-left corner-deco"></div>
-                    <div class="bottom-right corner-deco"></div>
-                    <div class="panel-header">Real-time_Analysis_Data</div>
-                    
-                    <div class="p-8 grid grid-cols-1 md:grid-cols-5 gap-8">
-                        <div class="md:col-span-3 flex flex-col justify-center items-center bg-[#111418] border border-gray-800 rounded-sm p-6 relative">
-                            <div class="absolute top-2 left-3 text-[9px] text-gray-600 font-bold uppercase tracking-widest">Est. Surface Temp</div>
-                            <div class="flex items-baseline">
-                                <span id="resultTemp" class="text-8xl font-black text-white lcd-number tracking-tighter glow-text">--</span>
-                                <span class="text-3xl ml-2 text-cyan-500 font-bold">°C</span>
-                            </div>
-                            
-                            <div id="safetyWarning" class="mt-6 w-full py-2 px-4 rounded-sm text-[11px] font-black text-center uppercase tracking-[0.2em] hidden transition-all duration-300">
-                                --
-                            </div>
+            <!-- Right Side: Display & Visualization -->
+            <div class="lg:col-span-3 flex flex-col gap-6">
+                <!-- Result Panels -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="industrial-card bg-[#1c2128] border-l-4 border-l-cyan-500 p-6 flex flex-col items-center justify-center">
+                        <label class="text-[10px] tracking-widest mb-1 text-gray-300 uppercase font-bold">Chassis Surface Temp (Avg)</label>
+                        <div class="flex items-baseline">
+                            <span id="res_case" class="text-6xl font-black result-glow tracking-tighter">--</span>
+                            <span class="text-xl ml-2 font-bold text-cyan-400 italic">&deg;C</span>
                         </div>
-
-                        <div class="md:col-span-2 flex flex-col justify-center space-y-6">
-                            <div class="relative pl-4 border-l-2 border-gray-700">
-                                <span class="label-style mb-1 text-cyan-400">Total Area [A]</span>
-                                <div class="text-2xl font-bold text-white"><span id="resArea" class="lcd-number">--</span> <span class="text-xs text-gray-500 font-medium">mm²</span></div>
-                            </div>
-                            <div class="relative pl-4 border-l-2 border-gray-700">
-                                <span class="label-style mb-1 text-orange-400">Temp Delta [ΔT]</span>
-                                <div class="text-2xl font-bold text-white">+<span id="resDelta" class="lcd-number">--</span> <span class="text-xs text-gray-500 font-medium">°C</span></div>
-                            </div>
-                            <div class="relative pl-4 border-l-2 border-gray-700">
-                                <span class="label-style mb-1 text-purple-400">Resis. [Rca]</span>
-                                <div class="text-2xl font-bold text-white"><span id="resResistance" class="lcd-number">--</span> <span class="text-xs text-gray-500 font-medium">°C/W</span></div>
-                            </div>
+                    </div>
+                    <div class="industrial-card bg-[#1c2128] border-l-4 border-l-orange-500 p-6 flex flex-col items-center justify-center">
+                        <label class="text-[10px] tracking-widest mb-1 text-gray-300 uppercase font-bold">10x10mm Hotspot (Max)</label>
+                        <div class="flex items-baseline">
+                            <span id="res_hotspot" class="text-6xl font-black hotspot-glow tracking-tighter">--</span>
+                            <span class="text-xl ml-2 font-bold text-orange-400 italic">&deg;C</span>
                         </div>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="industrial-card rounded-sm p-5 bg-[#1a1d21]">
-                        <div class="text-[11px] font-bold text-cyan-500 uppercase mb-3 flex items-center">
-                            <span class="mr-2">■</span> Calculation Logic
-                        </div>
-                        <div class="space-y-3">
-                            <code class="block bg-black p-3 rounded-sm text-green-400 text-xs border border-gray-800 font-bold">
-                                Ts = Ta + P / (h * A)
-                            </code>
-                            <p class="text-[11px] text-gray-400 leading-relaxed">
-                                此模型假設熱量均勻散佈於外殼六面。
-                            </p>
-                        </div>
+                <div class="industrial-card flex-grow flex flex-col min-h-[400px]">
+                    <div class="card-header flex justify-between items-center">
+                        <span>Thermal Visualization & Hotspot Mapping</span>
+                        <span id="ui_status" class="text-[10px] text-gray-400 font-bold uppercase">NOMINAL</span>
                     </div>
-                    <div class="industrial-card rounded-sm p-5 bg-[#1a1d21]">
-                        <div class="text-[11px] font-bold text-yellow-500 uppercase mb-3 flex items-center">
-                            <span class="mr-2">■</span> Engineering Notes
+                    <div id="render-canvas">
+                        <div id="chassis-box" class="border-2 border-cyan-700 relative transition-all duration-300">
+                            <!-- Heat Source -->
+                            <div id="heat-source" class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-cyan-800/50 border border-cyan-400 flex items-center justify-center overflow-hidden">
+                                <div class="w-full h-full absolute animate-pulse bg-cyan-400/20"></div>
+                                <span class="text-[9px] text-white font-bold z-10 uppercase">Heat Source</span>
+                            </div>
+                            <!-- Hotspot Marker (10x10mm) -->
+                            <div id="hotspot-marker" class="hotspot-marker left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
+                                <div class="w-1 h-1 bg-orange-500 rounded-full"></div>
+                            </div>
+                            
+                            <!-- Dimensions -->
+                            <div class="dim-line dim-line-h" style="top: -25px; border-color: #00d2ff; color: #00d2ff; font-weight: bold;">
+                                <span class="px-2 bg-[#0d1117]">L:<span id="ui_l">200</span></span>
+                            </div>
+                            <div class="dim-line dim-line-v" style="right: -40px; border-color: #00d2ff; color: #00d2ff; font-weight: bold;">
+                                <span class="px-2 bg-[#0d1117] rotate-90">W:<span id="ui_w">150</span></span>
+                            </div>
+                            <div id="ray-container" class="absolute inset-0 pointer-events-none"></div>
                         </div>
-                        <ul class="text-[11px] text-gray-400 space-y-2">
-                            <li class="flex items-start"><span class="mr-2 text-yellow-500">▶</span> 注意局部熱點通常比均溫Tcase高出 10~20%。</li>
-                            <li class="flex items-start"><span class="mr-2 text-yellow-500">▶</span> [h] 係數隨環境氣流流速與設計細節變動。</li>
-                        </ul>
                     </div>
                 </div>
             </div>
         </div>
 
-        <footer class="mt-12 pt-4 border-t border-gray-800 flex justify-between items-center text-gray-600 text-[10px] font-bold tracking-[0.2em] uppercase">
-            <div>Creator: Randy Chen</div>
-            <div>Ref Code: 2025-DFT-PRO</div>
-            <div>© Confidential Simulation Tool</div>
-        </footer>
+        <!-- Documentation Page -->
+        <div id="tab-docs" class="hidden space-y-6">
+            <div class="industrial-card p-6">
+                <h2 class="text-2xl font-bold text-cyan-400 mb-4 border-b border-gray-600 pb-2">理論基礎與物理假設 (Technical Specifications)</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div>
+                        <h3 class="text-lg font-bold text-white mb-2 uppercase tracking-wider">核心物理假設 (Assumptions)</h3>
+                        <ul class="text-sm space-y-2 text-gray-200 list-disc pl-5">
+                            <li><strong class="text-white">穩態分析 (Steady-state)：</strong> 系統已達到熱平衡，內部能量不隨時間變化。</li>
+                            <li><strong class="text-white">機殼平均溫度：</strong> 假設機殼表面溫度 $T_s$ 透過熱平衡計算得出。</li>
+                            <li><strong class="text-white">灰體輻射：</strong> 所有表面均視為灰體 (Gray Body)，其發射率等於吸收率。</li>
+                            <li><strong class="text-white">10x10mm Hotspot：</strong> 基於經驗係數估算熱源正上方機殼表面的局部高溫，考慮內外部溫差與導熱路徑。</li>
+                            <li><strong class="text-white">自然對流：</strong> 外部環境為靜止空氣，對流係數 $h$ 設定為常數。</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-white mb-2 uppercase tracking-wider">求解機制</h3>
+                        <p class="text-sm text-gray-200 leading-relaxed">
+                            系統採用 <strong class="text-cyan-400">Newton-Raphson 迭代法</strong> 求解非線性熱平衡方程式。
+                            透過計算熱對流與熱輻射的總和，使其等於輸入功率 $P_{in}$，反推得出表面平衡溫度。
+                            局部熱點則引入經驗阻抗模型 $R_{\theta, \text{local}}$ 進行疊加計算。
+                        </p>
+                    </div>
+                </div>
+
+                <div class="mt-8">
+                    <h3 class="text-lg font-bold text-white mb-4 uppercase tracking-wider">計算公式 (Governing Equations)</h3>
+                    <div class="grid grid-cols-1 gap-4">
+                        <div class="bg-black/40 p-5 border border-gray-600 rounded">
+                            <p class="text-xs text-cyan-300 mb-2 font-bold">1. 總能量平衡方程式 (Energy Balance):</p>
+                            <div class="text-xl text-white">
+                                $$P = Q_{conv} + Q_{rad}$$
+                            </div>
+                        </div>
+                        <div class="bg-black/40 p-5 border border-gray-600 rounded">
+                            <p class="text-xs text-cyan-300 mb-2 font-bold">2. 牛頓冷卻定律 (Newton's Law of Cooling):</p>
+                            <div class="text-xl text-white">
+                                $$Q_{conv} = h \cdot A_{case} \cdot (T_s - T_{amb})$$
+                            </div>
+                        </div>
+                        <div class="bg-black/40 p-5 border border-gray-600 rounded">
+                            <p class="text-xs text-cyan-300 mb-2 font-bold">3. 局部熱點經驗公式 (Empirical Hotspot):</p>
+                            <div class="text-xl text-white">
+                                $$T_{hotspot} \approx T_s + \Delta T_{local} (P, A_{src}, \epsilon_{in})$$
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6 p-4 border-t border-gray-700">
+                    <p class="text-[11px] text-gray-400 italic">
+                        * 其中 $\sigma$ 為常數 $5.67 \times 10^{-8} \text{ W/m}^2\text{K}^4$。面積 $A_{case}$ 計算包含機殼之六面總和。
+                    </p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
-        // 阻擋右鍵選單
-        document.addEventListener('contextmenu', function(e) {
-            e.preventDefault();
-        }, false);
+        // 禁止右鍵選單
+        document.addEventListener('contextmenu', e => e.preventDefault());
 
-        function setH(val) {
-            document.getElementById('hValue').value = val;
-            calculate();
+        // 即時時鐘
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-GB', { hour12: false });
+            const clockEl = document.getElementById('real-time-clock');
+            if (clockEl) clockEl.innerText = timeStr;
         }
+        setInterval(updateClock, 1000);
+        updateClock();
 
-        function calculate() {
-            const p = parseFloat(document.getElementById('power').value) || 0;
-            const ta = parseFloat(document.getElementById('ambient').value) || 0;
-            const l_mm = parseFloat(document.getElementById('dimL').value) || 0;
-            const w_mm = parseFloat(document.getElementById('dimW').value) || 0;
-            const h_dim_mm = parseFloat(document.getElementById('dimH').value) || 0;
-            const h_coeff = parseFloat(document.getElementById('hValue').value) || 0;
+        // 頁面切換
+        function switchTab(tab) {
+            const main = document.getElementById('tab-main');
+            const docs = document.getElementById('tab-docs');
+            const btnMain = document.getElementById('btn-main');
+            const btnDocs = document.getElementById('btn-docs');
 
-            const area_mm2 = 2 * (l_mm * w_mm + l_mm * h_dim_mm + w_mm * h_dim_mm);
-            const area_m2 = area_mm2 / 1000000;
-            
-            if (area_m2 <= 0 || h_coeff <= 0) {
-                updateUI("--", "--", "--", "--");
-                document.getElementById('safetyWarning').classList.add('hidden');
-                return;
-            }
-
-            const deltaT = p / (h_coeff * area_m2);
-            const ts = ta + deltaT;
-            const resistance = deltaT / p;
-
-            updateUI(
-                ts.toFixed(1), 
-                Math.round(area_mm2).toLocaleString(), 
-                deltaT.toFixed(1), 
-                (p > 0 ? resistance.toFixed(2) : "0")
-            );
-
-            handleWarning(ts);
-        }
-
-        function updateUI(ts, area, dt, r) {
-            document.getElementById('resultTemp').innerText = ts;
-            document.getElementById('resArea').innerText = area;
-            document.getElementById('resDelta').innerText = dt;
-            document.getElementById('resResistance').innerText = r;
-        }
-
-        function handleWarning(ts) {
-            const warningBox = document.getElementById('safetyWarning');
-            warningBox.classList.add('hidden');
-            
-            if (ts > 60) {
-                warningBox.classList.remove('hidden');
-                warningBox.className = "mt-6 w-full py-2 px-4 rounded-sm text-[11px] font-black text-center uppercase tracking-[0.2em] bg-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.5)] border border-red-400";
-                warningBox.innerHTML = "!! Critical System Overheat !!";
-            } else if (ts > 45) {
-                warningBox.classList.remove('hidden');
-                warningBox.className = "mt-6 w-full py-2 px-4 rounded-sm text-[11px] font-black text-center uppercase tracking-[0.2em] bg-yellow-500 text-black shadow-[0_0_15px_rgba(234,179,8,0.3)] border border-yellow-300";
-                warningBox.innerHTML = "!! Thermal Caution Level High !!";
+            if(tab === 'main') {
+                main.classList.remove('hidden');
+                docs.classList.add('hidden');
+                btnMain.classList.add('active');
+                btnDocs.classList.remove('active');
+                solve(); 
+            } else {
+                main.classList.add('hidden');
+                docs.classList.remove('hidden');
+                btnMain.classList.remove('active');
+                btnDocs.classList.add('active');
+                if (window.MathJax) {
+                    window.MathJax.typesetPromise();
+                }
             }
         }
 
-        window.onload = calculate;
+        // 熱力求解邏輯
+        function solve() {
+            const cL = parseFloat(document.getElementById('cL').value) || 1;
+            const cW = parseFloat(document.getElementById('cW').value) || 1;
+            const cH = parseFloat(document.getElementById('cH').value) || 1;
+            let hA = parseFloat(document.getElementById('hA').value) || 1;
+            let hB = parseFloat(document.getElementById('hB').value) || 1;
+            
+            const P = parseFloat(document.getElementById('heatLoad').value) || 0;
+            const Tamb = parseFloat(document.getElementById('tAmb').value) || 25;
+            const epsOut = parseFloat(document.getElementById('epsOut').value) || 0.9;
+            const epsIn = parseFloat(document.getElementById('epsIn').value) || 0.8;
+
+            // 尺寸限制保護
+            if (hA > cL) hA = cL;
+            if (hB > cW) hB = cW;
+            document.getElementById('size-warning').classList.toggle('hidden', (hA <= cL && hB <= cW));
+
+            const sigma = 5.67e-8;
+            const TambK = Tamb + 273.15;
+            const h_conv = 5.5; 
+            const areaCase = 2 * ((cL * cW) + (cL * cH) + (cW * cH)) / 1e6;
+
+            // Newton-Raphson 求解 Ts (K) - 機殼平均表面溫度
+            let TsK = TambK + 10; 
+            for(let i=0; i<100; i++) {
+                let q_conv = h_conv * areaCase * (TsK - TambK);
+                let q_rad = epsOut * sigma * areaCase * (Math.pow(TsK, 4) - Math.pow(TambK, 4));
+                let f = q_conv + q_rad - P;
+                let df = h_conv * areaCase + 4 * epsOut * sigma * areaCase * Math.pow(TsK, 3);
+                let delta = f / df;
+                TsK -= delta;
+                if(Math.abs(delta) < 0.0001) break;
+            }
+
+            const TsC = TsK - 273.15;
+
+            // 經驗公式計算 10x10mm Hotspot 溫度
+            // 假設：局部溫升與功率成正比，與熱源面積成反比，並受機殼高度影響
+            // 係數 0.15 為工業經驗估算常數 (Thermal Resistance proxy)
+            const srcAreaM2 = (hA * hB) / 1e6;
+            const hotspotRise = (P * 0.12) / (Math.sqrt(srcAreaM2) * (1 + epsIn) * 1.5);
+            // 疊加高度影響 (cH 越小，熱源越接近表面，hotspot 越高)
+            const heightFactor = 50 / Math.max(10, cH); 
+            const finalHotspot = TsC + (hotspotRise * heightFactor * 0.2);
+
+            // 更新結果
+            document.getElementById('res_case').innerText = TsC.toFixed(1);
+            document.getElementById('res_hotspot').innerText = finalHotspot.toFixed(1);
+            
+            document.getElementById('ui_l').innerText = cL;
+            document.getElementById('ui_w').innerText = cW;
+
+            updateCanvas(cL, cW, hA, hB, epsOut, TsC, finalHotspot);
+        }
+
+        function updateCanvas(cL, cW, hA, hB, epsO, temp, hotspot) {
+            const box = document.getElementById('chassis-box');
+            const source = document.getElementById('heat-source');
+            const marker = document.getElementById('hotspot-marker');
+            const container = document.getElementById('ray-container');
+
+            const canvasMax = 320;
+            const scale = Math.min(canvasMax/cL, canvasMax/cW);
+            
+            box.style.width = (cL * scale) + 'px';
+            box.style.height = (cW * scale) + 'px';
+            source.style.width = (hA * scale) + 'px';
+            source.style.height = (hB * scale) + 'px';
+
+            // 縮放 Hotspot Marker (代表實際 10x10mm)
+            marker.style.width = (10 * scale) + 'px';
+            marker.style.height = (10 * scale) + 'px';
+
+            const intensity = Math.min(1, Math.max(0, (temp - 25) / 60));
+            box.style.boxShadow = `0 0 60px rgba(0, 210, 255, ${intensity * 0.5})`;
+            box.style.borderColor = `rgba(0, 210, 255, ${0.4 + intensity * 0.6})`;
+            
+            container.innerHTML = '';
+            const pCount = Math.floor(epsO * 40 * (intensity + 0.3));
+            for(let i=0; i<pCount; i++) {
+                const ray = document.createElement('div');
+                ray.className = 'heat-ray';
+                ray.style.left = (Math.random() * 100) + '%';
+                ray.style.bottom = '-2px';
+                ray.style.animationDuration = (2 + Math.random() * 2) + 's';
+                ray.style.animationDelay = (Math.random() * 2) + 's';
+                container.appendChild(ray);
+            }
+
+            const status = document.getElementById('ui_status');
+            if (hotspot > 85) {
+                status.innerText = 'HOTSPOT CRITICAL';
+                status.className = 'text-[10px] text-red-400 font-bold animate-pulse uppercase';
+            } else if (temp > 70) {
+                status.innerText = 'THERMAL WARNING';
+                status.className = 'text-[10px] text-yellow-400 font-bold uppercase';
+            } else {
+                status.innerText = 'OPERATIONAL NOMINAL';
+                status.className = 'text-[10px] text-gray-300 font-bold uppercase';
+            }
+        }
+
+        window.onload = solve;
     </script>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </body>
-
 </html>
